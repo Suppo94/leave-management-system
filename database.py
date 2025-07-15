@@ -1,21 +1,47 @@
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, ForeignKey, Decimal, Date, Time, Text
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, ForeignKey, Date, Time, Text
+from sqlalchemy.types import Numeric
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime, date
+from decimal import Decimal
 import streamlit as st
-from decouple import config
 import os
 
-# Database configuration
-try:
+# Database configuration with smart fallback
+def get_database_url():
+    """Get database URL with fallback logic"""
+    # Check if we're in a production environment
+    is_production = any([
+        "STREAMLIT_CLOUD" in os.environ,
+        "HEROKU" in os.environ,
+        "RAILWAY" in os.environ,
+        "RENDER" in os.environ,
+        "VERCEL" in os.environ,
+        os.environ.get("PRODUCTION", "").lower() == "true"
+    ])
+    
     # Try to get from Streamlit secrets first
-    DATABASE_URL = st.secrets.get("DATABASE_URL", None)
-    if not DATABASE_URL:
-        # Fallback to decouple config
-        DATABASE_URL = config('DATABASE_URL', default='postgresql://postgres:Aa.01017234828!@db.wejbgeihnluhufvzdwee.supabase.co:5432/postgres')
-except:
-    # If streamlit not available, use decouple
-    DATABASE_URL = config('DATABASE_URL', default='postgresql://postgres:Aa.01017234828!@db.wejbgeihnluhufvzdwee.supabase.co:5432/postgres')
+    try:
+        DATABASE_URL = st.secrets.get("DATABASE_URL", None)
+        if DATABASE_URL:
+            return DATABASE_URL
+    except:
+        pass
+    
+    # Get from environment variable
+    env_url = os.environ.get('DATABASE_URL', None)
+    if env_url:
+        return env_url
+    
+    # Production vs Local fallback
+    if is_production:
+        # Production: Use Supabase PostgreSQL
+        return 'postgresql://postgres:Aa.01017234828!@db.wejbgeihnluhufvzdwee.supabase.co:5432/postgres'
+    else:
+        # Local development: Use SQLite
+        return 'sqlite:///leave_management.db'
+
+DATABASE_URL = get_database_url()
 
 # Create engine
 engine = create_engine(DATABASE_URL)
@@ -35,7 +61,6 @@ class User(Base):
     
     # Relationship
     profile = relationship("UserProfile", back_populates="user", uselist=False)
-    leave_requests = relationship("LeaveRequest", back_populates="user")
 
 class UserProfile(Base):
     __tablename__ = "user_profiles"
@@ -59,7 +84,7 @@ class UserProfile(Base):
     user = relationship("User", back_populates="profile")
     supervisor = relationship("UserProfile", remote_side=[id])
     leave_balances = relationship("LeaveBalance", back_populates="user")
-    leave_requests = relationship("LeaveRequest", back_populates="employee")
+    leave_requests = relationship("LeaveRequest", back_populates="employee", foreign_keys="LeaveRequest.employee_id")
 
 class LeaveType(Base):
     __tablename__ = "leave_types"
@@ -70,7 +95,7 @@ class LeaveType(Base):
     requires_documentation = Column(Boolean, default=False)
     requires_reason = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
-    pay_percentage = Column(Decimal(5, 2), default=100.00)
+    pay_percentage = Column(Numeric(5, 2), default=100.00)
     
     # Relationships
     leave_balances = relationship("LeaveBalance", back_populates="leave_type")
@@ -82,9 +107,9 @@ class LeaveBalance(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("user_profiles.id"))
     leave_type_id = Column(Integer, ForeignKey("leave_types.id"))
-    allocated_days = Column(Decimal(6, 2), default=0)
-    used_days = Column(Decimal(6, 2), default=0)
-    carry_over_days = Column(Decimal(6, 2), default=0)
+    allocated_days = Column(Numeric(6, 2), default=0)
+    used_days = Column(Numeric(6, 2), default=0)
+    carry_over_days = Column(Numeric(6, 2), default=0)
     year = Column(Integer, default=datetime.now().year)
     
     # Relationships
@@ -99,7 +124,6 @@ class LeaveRequest(Base):
     __tablename__ = "leave_requests"
     
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
     employee_id = Column(Integer, ForeignKey("user_profiles.id"))
     leave_type_id = Column(Integer, ForeignKey("leave_types.id"))
     start_date = Column(Date)
@@ -107,7 +131,7 @@ class LeaveRequest(Base):
     start_time = Column(Time)
     end_time = Column(Time)
     duration_type = Column(String, default="full_day")  # full_day, half_day, hours
-    total_days = Column(Decimal(6, 2))
+    total_days = Column(Numeric(6, 2))
     reason = Column(Text)
     status = Column(String, default="pending")  # pending, approved, rejected, cancelled
     
@@ -124,7 +148,6 @@ class LeaveRequest(Base):
     supporting_document = Column(String)  # File path
     
     # Relationships
-    user = relationship("User", back_populates="leave_requests")
     employee = relationship("UserProfile", back_populates="leave_requests", foreign_keys=[employee_id])
     leave_type = relationship("LeaveType", back_populates="leave_requests")
     approved_by = relationship("UserProfile", foreign_keys=[approved_by_id])

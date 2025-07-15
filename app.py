@@ -5,7 +5,7 @@ from database import *
 from streamlit_option_menu import option_menu
 import plotly.express as px
 import plotly.graph_objects as go
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, joinedload
 from sqlalchemy import and_, or_, func
 import hashlib
 import json
@@ -110,7 +110,7 @@ def get_leave_balances(user_profile_id):
     """Get leave balances for a user"""
     db = SessionLocal()
     try:
-        balances = db.query(LeaveBalance).join(LeaveType).filter(
+        balances = db.query(LeaveBalance).options(joinedload(LeaveBalance.leave_type)).filter(
             LeaveBalance.user_id == user_profile_id,
             LeaveBalance.year == datetime.now().year
         ).all()
@@ -122,10 +122,17 @@ def get_leave_requests(user_id=None, employee_id=None, status=None):
     """Get leave requests"""
     db = SessionLocal()
     try:
-        query = db.query(LeaveRequest).join(User).join(UserProfile).join(LeaveType)
+        query = db.query(LeaveRequest).options(
+            joinedload(LeaveRequest.employee),
+            joinedload(LeaveRequest.leave_type),
+            joinedload(LeaveRequest.approved_by)
+        )
         
         if user_id:
-            query = query.filter(LeaveRequest.user_id == user_id)
+            # For user-based queries, we need to get the employee profile first
+            user_profile = db.query(UserProfile).filter(UserProfile.user_id == user_id).first()
+            if user_profile:
+                query = query.filter(LeaveRequest.employee_id == user_profile.id)
         if employee_id:
             query = query.filter(LeaveRequest.employee_id == employee_id)
         if status:
@@ -136,12 +143,11 @@ def get_leave_requests(user_id=None, employee_id=None, status=None):
     finally:
         db.close()
 
-def create_leave_request(user_id, employee_id, leave_type_id, start_date, end_date, duration_type, total_days, reason=None):
+def create_leave_request(employee_id, leave_type_id, start_date, end_date, duration_type, total_days, reason=None):
     """Create a new leave request"""
     db = SessionLocal()
     try:
         leave_request = LeaveRequest(
-            user_id=user_id,
             employee_id=employee_id,
             leave_type_id=leave_type_id,
             start_date=start_date,

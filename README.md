@@ -177,6 +177,26 @@ Modify `create_initial_data()` to adjust:
 - Senior employee benefits
 - Annual carry-over rules
 
+## 🌐 Current Deployment Status
+
+- **✅ Local Development**: Fully working with SQLite database
+- **✅ Database System**: Smart fallback (SQLite local, PostgreSQL production)
+- **✅ Core Features**: Employee dashboard, supervisor dashboard, leave management
+- **✅ Authentication**: Email-based with @tempo.fit domain restriction
+- **🔄 Online Deployment**: Ready for Streamlit Cloud, Heroku, or Railway
+
+### Quick Local Testing
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Initialize database
+python -c "from database import init_database, create_initial_data; init_database(); create_initial_data()"
+
+# Run application
+python -m streamlit run app.py
+```
+
 ## 🚀 Live Demo
 
 Once deployed, the application will be available at:
