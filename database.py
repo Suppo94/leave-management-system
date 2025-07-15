@@ -7,34 +7,24 @@ from decimal import Decimal
 import streamlit as st
 import os
 
-# Database configuration with smart fallback
+# Database configuration - simplified for Streamlit Cloud
 def get_database_url():
     """Get database URL with fallback logic"""
-    # Check if we're in a production environment
-    is_production = any([
-        "STREAMLIT_CLOUD" in os.environ,
-        "HEROKU" in os.environ,
-        "RAILWAY" in os.environ,
-        "RENDER" in os.environ,
-        "VERCEL" in os.environ,
-        os.environ.get("PRODUCTION", "").lower() == "true"
-    ])
-    
-    # Try to get from Streamlit secrets first
+    # First try Streamlit secrets (production)
     try:
-        DATABASE_URL = st.secrets.get("DATABASE_URL", None)
-        if DATABASE_URL:
-            return DATABASE_URL
+        db_url = st.secrets.get("DATABASE_URL", None)
+        if db_url:
+            return db_url
     except:
         pass
     
-    # Get from environment variable
-    env_url = os.environ.get('DATABASE_URL', None)
-    if env_url:
-        return env_url
+    # Then try environment variables
+    db_url = os.environ.get('DATABASE_URL', None)
+    if db_url:
+        return db_url
     
-    # Production vs Local fallback
-    if is_production:
+    # Check if we're in Streamlit Cloud (production)
+    if hasattr(st, 'secrets') or 'streamlit' in os.environ.get('HOME', '').lower():
         # Production: Use Supabase PostgreSQL
         return 'postgresql://postgres:Aa.01017234828!@db.wejbgeihnluhufvzdwee.supabase.co:5432/postgres'
     else:
