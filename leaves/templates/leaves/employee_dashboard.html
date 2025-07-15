@@ -1,0 +1,240 @@
+{% extends 'leaves/base.html' %}
+
+{% block title %}Employee Dashboard - {{ block.super }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>
+                <i class="fas fa-user me-2"></i>Welcome, {{ user.get_full_name|default:user.username }}
+            </h1>
+            <a href="{% url 'leaves:create_leave_request' %}" class="btn btn-primary">
+                <i class="fas fa-plus me-1"></i>New Leave Request
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Employee Info Card -->
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <strong>Employee ID:</strong> {{ user_profile.employee_id }}
+                    </div>
+                    <div class="col-md-3">
+                        <strong>Position:</strong> {{ user_profile.position }}
+                    </div>
+                    <div class="col-md-3">
+                        <strong>Department:</strong> {{ user_profile.department }}
+                    </div>
+                    <div class="col-md-3">
+                        <strong>Supervisor:</strong> 
+                        {% if user_profile.supervisor %}
+                            {{ user_profile.supervisor.user.get_full_name }}
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Leave Balances -->
+<div class="row mb-4">
+    <div class="col-12">
+        <h3><i class="fas fa-chart-bar me-2"></i>Leave Balances</h3>
+    </div>
+    {% for balance in leave_balances %}
+        <div class="col-md-6 col-lg-4 mb-3">
+            <div class="card leave-balance-card {% if balance.used_percentage > 90 %}danger{% elif balance.used_percentage > 75 %}warning{% endif %}">
+                <div class="card-body">
+                    <h5 class="card-title">{{ balance.leave_type.name }}</h5>
+                    <div class="row">
+                        <div class="col-6">
+                            <small class="text-muted">Available</small>
+                            <h4 class="mb-0">{{ balance.available_days }}</h4>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted">Used</small>
+                            <h4 class="mb-0">{{ balance.used_days }}</h4>
+                        </div>
+                    </div>
+                    <div class="progress mt-2" style="height: 8px;">
+                        <div class="progress-bar 
+                            {% if balance.used_percentage > 90 %}bg-danger
+                            {% elif balance.used_percentage > 75 %}bg-warning
+                            {% else %}bg-success
+                            {% endif %}" 
+                            role="progressbar" 
+                            style="width: {{ balance.used_percentage }}%"
+                            aria-valuenow="{{ balance.used_percentage }}" 
+                            aria-valuemin="0" 
+                            aria-valuemax="100">
+                        </div>
+                    </div>
+                    <small class="text-muted">{{ balance.used_percentage|floatformat:1 }}% used</small>
+                </div>
+            </div>
+        </div>
+    {% empty %}
+        <div class="col-12">
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle me-2"></i>
+                No leave balances found for this year. Please contact HR to set up your leave allocation.
+            </div>
+        </div>
+    {% endfor %}
+</div>
+
+<!-- Quick Stats -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card bg-light">
+            <div class="card-body text-center">
+                <i class="fas fa-clock fa-2x text-warning mb-2"></i>
+                <h3 class="mb-0">{{ pending_requests }}</h3>
+                <small class="text-muted">Pending Requests</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card bg-light">
+            <div class="card-body text-center">
+                <i class="fas fa-calendar-check fa-2x text-success mb-2"></i>
+                <h3 class="mb-0">{{ recent_requests|length }}</h3>
+                <small class="text-muted">Recent Requests</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card bg-light">
+            <div class="card-body text-center">
+                <i class="fas fa-user-tie fa-2x text-info mb-2"></i>
+                <h3 class="mb-0">{{ user_profile.years_of_service|floatformat:1 }}</h3>
+                <small class="text-muted">Years of Service</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Leave Requests -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-history me-2"></i>Recent Leave Requests
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if recent_requests %}
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Leave Type</th>
+                                    <th>Duration</th>
+                                    <th>Days</th>
+                                    <th>Status</th>
+                                    <th>Requested</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for request in recent_requests %}
+                                    <tr>
+                                        <td>{{ request.leave_type.name }}</td>
+                                        <td>
+                                            {{ request.start_date }} 
+                                            {% if request.start_date != request.end_date %}
+                                                to {{ request.end_date }}
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ request.get_duration_display_text }}</td>
+                                        <td>
+                                            <span class="badge 
+                                                {% if request.status == 'pending' %}bg-warning
+                                                {% elif request.status == 'approved' %}bg-success
+                                                {% elif request.status == 'rejected' %}bg-danger
+                                                {% else %}bg-secondary
+                                                {% endif %} status-badge">
+                                                {{ request.get_status_display }}
+                                            </span>
+                                        </td>
+                                        <td>{{ request.created_at|date:"M d, Y" }}</td>
+                                        <td class="table-actions">
+                                            <a href="{% url 'leaves:leave_request_detail' request.id %}" 
+                                               class="btn btn-sm btn-outline-primary">
+                                                <i class="fas fa-eye me-1"></i>View
+                                            </a>
+                                            {% if request.status == 'pending' %}
+                                                <a href="{% url 'leaves:cancel_leave_request' request.id %}" 
+                                                   class="btn btn-sm btn-outline-danger"
+                                                   onclick="return confirm('Are you sure you want to cancel this request?')">
+                                                    <i class="fas fa-times me-1"></i>Cancel
+                                                </a>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-calendar-times fa-3x text-muted mb-3"></i>
+                        <h5 class="text-muted">No leave requests yet</h5>
+                        <p class="text-muted">Start by creating your first leave request!</p>
+                        <a href="{% url 'leaves:create_leave_request' %}" class="btn btn-primary">
+                            <i class="fas fa-plus me-1"></i>Create Leave Request
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-bolt me-2"></i>Quick Actions
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3 mb-2">
+                        <a href="{% url 'leaves:create_leave_request' %}" class="btn btn-primary w-100">
+                            <i class="fas fa-plus me-1"></i>New Request
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-2">
+                        <a href="{% url 'leaves:leave_balance' %}" class="btn btn-info w-100">
+                            <i class="fas fa-chart-bar me-1"></i>View Balances
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-2">
+                        <a href="{% url 'leaves:profile' %}" class="btn btn-secondary w-100">
+                            <i class="fas fa-user me-1"></i>My Profile
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-2">
+                        <a href="mailto:hr@tempo.fit" class="btn btn-outline-primary w-100">
+                            <i class="fas fa-envelope me-1"></i>Contact HR
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 
